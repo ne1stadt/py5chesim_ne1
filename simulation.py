@@ -1,6 +1,7 @@
 """This is the simulation script.
 Simulation, cell and traffic profile parameters can be set here.
 """
+import json
 import os
 import sys
 
@@ -14,31 +15,34 @@ from UE import *
 #              Cell & Simulation parameters
 # ------------------------------------------------------------------------------------------------------
 
-bw = [
-    10
-]  # MHz (FR1: 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 90, 100; FR2: 50, 100, 200, 400)
-"""List containing each CC's bandwidth for the simulation. """
-fr = "FR1"  # FR1 or FR2
+with open('data.json') as file:
+    data = json.load(file)
+
+print(data)
+
+bw = data["bandwidths"]
+
+fr = data["frequency-range"]  # FR1 or FR2
 """String with frequency range (FR) to use. 'FR1' for FR1, or 'FR2' for FR2."""
-band = "B1"
+band = data["band"]
 """String with used band for simulation. In TDD mode it is important to set correctly a band from the next list: n257, n258, n260, n261."""
-tdd = False
+tdd = data["is-tdd"]
 """Boolean indicating if the cell operates in TDD mode."""
-buf = 81920  # 10240 #
+buf = data["buffer-size"]  # 10240 #
 """Integer with the maximum Bytes the UE Bearer buffer can tolerate before dropping packets."""
-schedulerInter = "PF11"  # RRp for improved Round Robin, PFXX for Proportional Fair
+schedulerInter = data["inter-scheduler"]  # RRp for improved Round Robin, PFXX for Proportional Fair
 """String indicating the Inter Slice Scheduler to use. For only one Slice simulations use ''.
 If the simulation includes more than one slice, set '' for Round Robin, 'RRp' for Round Robin Plus,
 or 'PFXY' for Proportional Fair with X=numExp and Y=denExp."""
 #                   Simulation parameters
-t_sim = 6000 # (ms)
+t_sim = data["simulation-time"] # (ms)
 """Simulation duration in milliseconds."""
-debMode = False  # to show queues information by TTI during simulation
+debMode = data["debugging-mode"]  # to show queues information by TTI during simulation
 """Boolean indicating if debugging mode is active. In that case, an html log file will be generated with schedulers operation.
 Note that in simulations with a high number of UEs this file can turn quite heavy."""
-measInterv = 100  # interval between meassures default 1000
+measInterv = data["measure-interval"]  # interval between meassures default 1000
 """Time interval (in milliseconds) between meassures for statistics reports."""
-interSliceSchGr = 30  # 3000.0 # interSlice scheduler time granularity
+interSliceSchGr = data["inter-scheduling-granularity"]  # 3000.0 # interSlice scheduler time granularity
 """Inter slice scheduler time granularity in milliseconds."""
 
 # -----------------------------------------------------------------
@@ -47,36 +51,39 @@ interSliceSchGr = 30  # 3000.0 # interSlice scheduler time granularity
 
 env = simpy.Environment()
 """Environment instance needed by simpy for runing PEM methods"""
-cell1 = Cell("c1", bw, fr, debMode, buf, tdd, interSliceSchGr, schedulerInter)
+cell1 = Cell(data["cell-id"], bw, fr, debMode, buf, tdd, interSliceSchGr, schedulerInter)
+
 """Cell instance for running the simulation"""
 interSliceSche1 = cell1.interSliceSched
 """interSliceScheduler instance"""
 
-
-UEgroup1 = UEgroup(
-    4,
-    0,
-    300,
-    0,
-    1,
-    0,
-    0,
-    1,
-    'Pareto',
-    'Constant',
-    "embb-0",
-    20,
-    "",
-    "Rr",
-    "SU",
-    4,
-    cell1,
-    t_sim,
-    measInterv,
-    env,
-    "S37",
-)  
-
+UEgroups = []
+for data_slice in data["slices"]:
+    UEgroups.append(
+        UEgroup(
+            data_slice["downlink-num-users"],
+            data_slice["uplink-num-users"],
+            data_slice["downlink-packet-size"],
+            data_slice["uplink-packet-size"],
+            data_slice["downlink-arrival-rate"],
+            data_slice["uplink-arrival-rate"],
+            data_slice["time-start"],
+            data_slice["time-end"],
+            data_slice["downlink-distribution"],
+            data_slice["uplink-distribution"],
+            data_slice["label"],
+            data_slice["delay-requirements"],
+            data_slice["accessibility-requirements"],
+            data_slice["intra-scheduler"],
+            data_slice["mimo-mode"],
+            data_slice["layers-for-mimo"],
+            cell1,
+            t_sim,
+            measInterv,
+            env,
+            data_slice["sinr"]
+        )
+    )
 
 """Group of users with defined traffic profile, capabilities and service requirements for which the sumulation will run.
 
@@ -91,10 +98,6 @@ schedulerType: RR: Rounf Robin, PF: Proportional Fair (10, 11)\n
 mimo_mode: SU, MU\n
 layers: in SU-MIMO is the number of layers/UE, in MU-MIMO is the number of simultaneous UE to serve with the same resources\n
 sinr: is a string starting starting with S if all ues have the same sinr or D if not. The value next will be the initial sinr of each ue or the maximum."""
-
-
-# Set UEgroups list according to the defined groups
-UEgroups = [UEgroup1]
 
 """UE group list for the configured simulation"""
 #           Slices creation
